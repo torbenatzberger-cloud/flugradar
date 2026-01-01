@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { getAircraftTypeName } from '../lib/aircraftTypes'
+import { getAirportName } from '../lib/airports'
 
 const DEMO_LOCATION = { lat: 48.6406, lon: 9.0118 }
 const ALERT_RADIUS_KM = 2
@@ -286,8 +287,14 @@ export default function DemoAlertPage() {
 
             {/* Route */}
             {route && (
-              <div className="text-lg text-yellow-400 font-semibold mb-4">
-                {route.origin} → {route.destination}
+              <div className="mb-4">
+                <div className="text-sm text-gray-500">Ziel</div>
+                <div className="text-2xl text-yellow-400 font-bold">
+                  {getAirportName(route.destination)}
+                </div>
+                <div className="text-sm text-gray-500 mt-1">
+                  von {getAirportName(route.origin)}
+                </div>
               </div>
             )}
 

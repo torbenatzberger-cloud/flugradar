@@ -1,6 +1,7 @@
 'use client'
 
 import { getAircraftTypeName } from '../lib/aircraftTypes'
+import { getAirportName } from '../lib/airports'
 
 interface Flight {
   hex: string
@@ -87,13 +88,23 @@ export default function FlightDetailModal({
           {/* Route Info */}
           {(origin || destination) && (
             <div className="bg-slate-900/50 rounded-lg p-4">
-              <div className="text-sm text-gray-400 mb-2">Route</div>
-              <div className="flex items-center justify-center gap-4 text-xl">
-                <span className="font-mono font-bold">{origin || '???'}</span>
-                <span className="text-gray-500">→</span>
-                <span className="font-mono font-bold">
-                  {destination || '???'}
-                </span>
+              <div className="flex items-center justify-between">
+                {/* Von */}
+                <div className="text-center flex-1">
+                  <div className="text-xs text-gray-500 mb-1">Von</div>
+                  <div className="text-lg font-bold">{getAirportName(origin)}</div>
+                  {origin && <div className="text-xs text-gray-500 font-mono">{origin}</div>}
+                </div>
+
+                {/* Pfeil */}
+                <div className="px-4 text-2xl text-gray-500">✈</div>
+
+                {/* Nach */}
+                <div className="text-center flex-1">
+                  <div className="text-xs text-gray-500 mb-1">Nach</div>
+                  <div className="text-lg font-bold text-yellow-400">{getAirportName(destination)}</div>
+                  {destination && <div className="text-xs text-gray-500 font-mono">{destination}</div>}
+                </div>
               </div>
             </div>
           )}

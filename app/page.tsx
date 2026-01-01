@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { getAircraftTypeName } from './lib/aircraftTypes'
+import { getAirportName } from './lib/airports'
 import FlightDetailModal from './components/FlightDetailModal'
 
 // Dynamic import for Leaflet (SSR fix)
@@ -465,9 +466,9 @@ export default function FlightRadar() {
                   {closestFlight.registration}
                 </span>
               )}
-              {flightRoutes.get(closestFlight.callsign)?.origin && flightRoutes.get(closestFlight.callsign)?.destination && (
+              {flightRoutes.get(closestFlight.callsign)?.destination && (
                 <span className="text-yellow-400 font-semibold">
-                  {flightRoutes.get(closestFlight.callsign)?.origin} → {flightRoutes.get(closestFlight.callsign)?.destination}
+                  → {getAirportName(flightRoutes.get(closestFlight.callsign)?.destination)}
                 </span>
               )}
             </div>
@@ -573,9 +574,9 @@ export default function FlightRadar() {
                         {flight.registration}
                       </span>
                     )}
-                    {route?.origin && route?.destination && (
+                    {route?.destination && (
                       <span className="text-yellow-400 font-semibold">
-                        {route.origin} → {route.destination}
+                        → {getAirportName(route.destination)}
                       </span>
                     )}
                   </div>

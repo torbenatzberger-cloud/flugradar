@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { getAircraftTypeName } from '../lib/aircraftTypes'
+import { getAirportName } from '../lib/airports'
 
 // Default: Werastraße 18, Holzgerlingen
 const DEFAULT_LOCATION = { lat: 48.6406, lon: 9.0118 }
@@ -14,9 +16,15 @@ interface Flight {
   altitude: number | null
   distance: number
   type: string | null
+  registration: string | null
   color: string
   name: string
   isApproaching: boolean
+}
+
+interface FlightRoute {
+  origin: string | null
+  destination: string | null
 }
 
 const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -40,12 +48,20 @@ const getAirlineInfo = (callsign: string | null): { color: string; name: string 
     'SWR': { color: 'bg-red-600', name: 'Swiss' },
     'TUI': { color: 'bg-blue-500', name: 'TUI fly' },
     'CFG': { color: 'bg-blue-400', name: 'Condor' },
+    'WZZ': { color: 'bg-purple-600', name: 'Wizz Air' },
+    'AUA': { color: 'bg-red-700', name: 'Austrian' },
+    'UAE': { color: 'bg-red-500', name: 'Emirates' },
+    'THY': { color: 'bg-red-600', name: 'Turkish' },
+    'AFR': { color: 'bg-blue-800', name: 'Air France' },
+    'BAW': { color: 'bg-blue-900', name: 'British Airways' },
+    'KLM': { color: 'bg-sky-600', name: 'KLM' },
   }
   return airlines[prefix] || { color: 'bg-slate-500', name: prefix }
 }
 
 export default function AlertMode() {
   const [alertFlight, setAlertFlight] = useState<Flight | null>(null)
+  const [alertRoute, setAlertRoute] = useState<FlightRoute | null>(null)
   const [showAlert, setShowAlert] = useState(false)
   const [lastAlertTime, setLastAlertTime] = useState<Date | null>(null)
   const [totalFlights, setTotalFlights] = useState(0)
@@ -53,17 +69,40 @@ export default function AlertMode() {
   const lastAlertedRef = useRef<Set<string>>(new Set())
   const prevDistancesRef = useRef<Map<string, number>>(new Map())
   const alertTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const routeCacheRef = useRef<Map<string, FlightRoute>>(new Map())
+
+  // Fetch route for a callsign
+  const fetchRoute = useCallback(async (callsign: string) => {
+    // Check cache first
+    if (routeCacheRef.current.has(callsign)) {
+      setAlertRoute(routeCacheRef.current.get(callsign) || null)
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/routes?callsign=${encodeURIComponent(callsign)}`)
+      const data = await response.json()
+      const route: FlightRoute = {
+        origin: data.origin || null,
+        destination: data.destination || null,
+      }
+      routeCacheRef.current.set(callsign, route)
+      setAlertRoute(route)
+    } catch {
+      setAlertRoute(null)
+    }
+  }, [])
 
   const fetchFlights = useCallback(async () => {
     try {
       const response = await fetch(
         `/api/flights?lat=${DEFAULT_LOCATION.lat}&lon=${DEFAULT_LOCATION.lon}&dist=${SEARCH_RADIUS_KM}`
       )
-      
+
       if (!response.ok) return
-      
+
       const data = await response.json()
-      
+
       if (data.ac) {
         const nearbyFlights = data.ac
           .filter((ac: any) => ac.lat && ac.lon)
@@ -72,13 +111,14 @@ export default function AlertMode() {
             const prevDistance = prevDistancesRef.current.get(ac.hex)
             const isApproaching = prevDistance !== undefined && distance < prevDistance
             prevDistancesRef.current.set(ac.hex, distance)
-            
+
             return {
               hex: ac.hex,
               callsign: ac.flight?.trim() || ac.hex,
               altitude: ac.alt_baro || ac.alt_geom,
               distance,
               type: ac.t,
+              registration: ac.r,
               isApproaching,
               ...getAirlineInfo(ac.flight?.trim())
             }
@@ -90,22 +130,29 @@ export default function AlertMode() {
 
         // Check for NEW flights in zone
         const newFlights = nearbyFlights.filter((f: Flight) => !lastAlertedRef.current.has(f.hex))
-        
+
         if (newFlights.length > 0) {
           const closest = newFlights[0]
           setAlertFlight(closest)
           setShowAlert(true)
           setLastAlertTime(new Date())
-          
+
+          // Fetch route for this flight
+          if (closest.callsign && closest.callsign !== closest.hex) {
+            fetchRoute(closest.callsign)
+          } else {
+            setAlertRoute(null)
+          }
+
           // Play sound
           if (audioRef.current) {
             audioRef.current.currentTime = 0
             audioRef.current.play().catch(() => {})
           }
-          
+
           // Add to alerted set
           newFlights.forEach((f: Flight) => lastAlertedRef.current.add(f.hex))
-          
+
           // Hide alert after 15 seconds
           if (alertTimeoutRef.current) {
             clearTimeout(alertTimeoutRef.current)
@@ -114,7 +161,7 @@ export default function AlertMode() {
             setShowAlert(false)
           }, 15000)
         }
-        
+
         // Clean up flights that left the zone
         const currentHexes = new Set(nearbyFlights.map((f: Flight) => f.hex))
         lastAlertedRef.current.forEach(hex => {
@@ -126,7 +173,7 @@ export default function AlertMode() {
     } catch (err) {
       console.error('Fetch error:', err)
     }
-  }, [])
+  }, [fetchRoute])
 
   useEffect(() => {
     fetchFlights()
@@ -154,29 +201,50 @@ export default function AlertMode() {
         <div className="alert-pulse w-full max-w-lg">
           <div className="bg-red-900/80 border-4 border-red-500 rounded-3xl p-8 text-center">
             <div className="text-6xl mb-4">✈️</div>
-            
+
             <div className="text-2xl text-red-300 mb-2">FLUGZEUG!</div>
-            
+
             <div className={`${alertFlight.color} inline-block px-6 py-2 rounded-xl text-3xl font-bold mb-4`}>
               {alertFlight.callsign}
             </div>
-            
+
             {alertFlight.name && (
-              <div className="text-xl text-gray-300 mb-4">{alertFlight.name}</div>
+              <div className="text-xl text-gray-300 mb-2">{alertFlight.name}</div>
             )}
-            
+
+            {/* Route Info */}
+            {alertRoute?.destination && (
+              <div className="mb-4">
+                <div className="text-sm text-gray-500">Ziel</div>
+                <div className="text-2xl text-yellow-400 font-bold">
+                  {getAirportName(alertRoute.destination)}
+                </div>
+                {alertRoute.origin && (
+                  <div className="text-sm text-gray-500 mt-1">
+                    von {getAirportName(alertRoute.origin)}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="text-5xl font-bold text-white mb-2">
-              {alertFlight.distance < 1 
+              {alertFlight.distance < 1
                 ? `${Math.round(alertFlight.distance * 1000)}m`
                 : `${alertFlight.distance.toFixed(1)}km`
               }
             </div>
-            
+
             <div className="text-xl text-gray-400">
               {formatAlt(alertFlight.altitude)}
-              {alertFlight.type && ` • ${alertFlight.type}`}
+              {alertFlight.type && ` • ${getAircraftTypeName(alertFlight.type)}`}
             </div>
-            
+
+            {alertFlight.registration && (
+              <div className="mt-2 text-gray-500 font-mono">
+                {alertFlight.registration}
+              </div>
+            )}
+
             {alertFlight.isApproaching && (
               <div className="mt-4 text-green-400 text-lg">
                 ↓ Kommt näher
@@ -201,13 +269,21 @@ export default function AlertMode() {
       )}
 
       {/* Back link - subtle */}
-      <a 
-        href="/" 
+      <a
+        href="/"
         className="fixed bottom-4 left-4 text-gray-700 hover:text-gray-500 text-sm"
       >
         ← Vollansicht
       </a>
-      
+
+      {/* Demo link */}
+      <a
+        href="/demo"
+        className="fixed top-4 right-4 text-gray-700 hover:text-gray-500 text-xs"
+      >
+        🧪 Demo
+      </a>
+
       {/* Status indicator */}
       <div className="fixed bottom-4 right-4 flex items-center gap-2 text-xs text-gray-700">
         <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
