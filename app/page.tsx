@@ -465,9 +465,9 @@ export default function FlightRadar() {
                   {closestFlight.registration}
                 </span>
               )}
-              {flightRoutes.get(closestFlight.callsign)?.destination && (
-                <span>
-                  → {flightRoutes.get(closestFlight.callsign)?.destination}
+              {flightRoutes.get(closestFlight.callsign)?.origin && flightRoutes.get(closestFlight.callsign)?.destination && (
+                <span className="text-yellow-400 font-semibold">
+                  {flightRoutes.get(closestFlight.callsign)?.origin} → {flightRoutes.get(closestFlight.callsign)?.destination}
                 </span>
               )}
             </div>
@@ -574,7 +574,7 @@ export default function FlightRadar() {
                       </span>
                     )}
                     {route?.origin && route?.destination && (
-                      <span className="text-gray-500">
+                      <span className="text-yellow-400 font-semibold">
                         {route.origin} → {route.destination}
                       </span>
                     )}
