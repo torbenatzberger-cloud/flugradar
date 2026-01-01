@@ -16,6 +16,9 @@ const FlightMap = dynamic(() => import('./components/FlightMap'), {
   ),
 })
 
+// App version - increment on each deploy
+const APP_VERSION = 'v1.2.0'
+
 // Default: Werastraße 18, Holzgerlingen
 const DEFAULT_LOCATION = { lat: 48.6406, lon: 9.0118, name: 'Holzgerlingen' }
 const ALERT_RADIUS_KM = 2 // 2km Alert-Zone
@@ -554,7 +557,8 @@ export default function FlightRadar() {
                         <span className="text-green-400 text-xs">↓</span>
                       )}
                     </div>
-                    <div className="font-mono text-blue-400">
+                    <div className={`font-mono ${flight.isApproaching ? 'text-green-400' : 'text-blue-400'}`}>
+                      {flight.isApproaching && <span className="mr-1">↓</span>}
                       {flight.distance < 1
                         ? `${Math.round(flight.distance * 1000)}m`
                         : `${flight.distance.toFixed(1)}km`
@@ -624,6 +628,7 @@ export default function FlightRadar() {
           {lastUpdate && (
             <div>Letztes Update: {lastUpdate.toLocaleTimeString('de-DE')}</div>
           )}
+          <div className="text-gray-700 font-mono">{APP_VERSION}</div>
         </div>
       </div>
 

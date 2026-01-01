@@ -4,6 +4,9 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { getAircraftTypeName } from '../lib/aircraftTypes'
 import { getAirportName } from '../lib/airports'
 
+// App version
+const APP_VERSION = 'v1.2.0'
+
 // Default: Werastraße 18, Holzgerlingen
 const DEFAULT_LOCATION = { lat: 48.6406, lon: 9.0118 }
 const ALERT_RADIUS_KM = 2
@@ -287,7 +290,7 @@ export default function AlertMode() {
       {/* Status indicator */}
       <div className="fixed bottom-4 right-4 flex items-center gap-2 text-xs text-gray-700">
         <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-        Live
+        Live • {APP_VERSION}
       </div>
     </div>
   )

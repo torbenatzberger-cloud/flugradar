@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { getAircraftTypeName } from '../lib/aircraftTypes'
 import { getAirportName } from '../lib/airports'
 
+const APP_VERSION = 'v1.2.0'
 const DEMO_LOCATION = { lat: 48.6406, lon: 9.0118 }
 const ALERT_RADIUS_KM = 2
 
@@ -376,7 +377,7 @@ export default function DemoAlertPage() {
       {/* Status indicator */}
       <div className="fixed bottom-4 right-4 flex items-center gap-2 text-xs text-gray-700">
         <div className={`w-2 h-2 rounded-full animate-pulse ${isRunning ? 'bg-green-500' : 'bg-gray-500'}`}></div>
-        {isRunning ? 'Simulation läuft' : 'Gestoppt'}
+        {isRunning ? 'Simulation läuft' : 'Gestoppt'} • {APP_VERSION}
       </div>
     </div>
   )
