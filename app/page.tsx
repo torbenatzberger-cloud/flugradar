@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { getAircraftTypeName } from './lib/aircraftTypes'
-import { getAirportName } from './lib/airports'
 import FlightDetailModal from './components/FlightDetailModal'
 
 // Dynamic import for Leaflet (SSR fix)
@@ -17,7 +16,7 @@ const FlightMap = dynamic(() => import('./components/FlightMap'), {
 })
 
 // App version - increment on each deploy
-const APP_VERSION = 'v1.3.0'
+const APP_VERSION = 'v1.4.0'
 
 // Default: Werastraße 18, Holzgerlingen
 const DEFAULT_LOCATION = { lat: 48.6406, lon: 9.0118, name: 'Holzgerlingen' }
@@ -47,13 +46,6 @@ interface Flight {
   prevDistance?: number
 }
 
-interface FlightRoute {
-  origin: string | null
-  originName: string | null
-  destination: string | null
-  destinationName: string | null
-  airline: string | null
-}
 
 // Haversine distance formula
 const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -119,42 +111,9 @@ export default function FlightRadar() {
   const [showSettings, setShowSettings] = useState(false)
   const [showMap, setShowMap] = useState(false)
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null)
-  const [flightRoutes, setFlightRoutes] = useState<Map<string, FlightRoute>>(new Map())
   const audioRef = useRef<HTMLAudioElement>(null)
   const lastAlertRef = useRef<Set<string>>(new Set())
   const prevDistancesRef = useRef<Map<string, number>>(new Map())
-  const fetchingRoutesRef = useRef<Set<string>>(new Set())
-
-  // Fetch route for a single flight
-  const fetchFlightRoute = useCallback(async (callsign: string) => {
-    if (fetchingRoutesRef.current.has(callsign) || flightRoutes.has(callsign)) return
-
-    fetchingRoutesRef.current.add(callsign)
-
-    try {
-      const response = await fetch(`/api/routes?callsign=${encodeURIComponent(callsign)}`)
-      const data = await response.json()
-
-      setFlightRoutes(prev => new Map(prev).set(callsign, {
-        origin: data.origin || null,
-        originName: data.originName || null,
-        destination: data.destination || null,
-        destinationName: data.destinationName || null,
-        airline: data.airline || null,
-      }))
-    } catch {
-      // Silently fail - routes are optional
-      setFlightRoutes(prev => new Map(prev).set(callsign, {
-        origin: null,
-        originName: null,
-        destination: null,
-        destinationName: null,
-        airline: null,
-      }))
-    } finally {
-      fetchingRoutesRef.current.delete(callsign)
-    }
-  }, [flightRoutes])
 
   // Fetch flights from ADSB.lol API
   const fetchFlights = useCallback(async () => {
@@ -239,15 +198,6 @@ export default function FlightRadar() {
     return () => clearInterval(interval)
   }, [fetchFlights])
 
-  // Fetch routes for visible flights
-  useEffect(() => {
-    flights.slice(0, 15).forEach(flight => {
-      if (flight.callsign && flight.callsign !== flight.hex && !flightRoutes.has(flight.callsign)) {
-        fetchFlightRoute(flight.callsign)
-      }
-    })
-  }, [flights, fetchFlightRoute, flightRoutes])
-
   // Get GPS location
   const handleGetLocation = () => {
     if (navigator.geolocation) {
@@ -284,10 +234,6 @@ export default function FlightRadar() {
 
   const handleFlightClick = (flight: Flight) => {
     setSelectedFlight(flight)
-    // Fetch route if not already fetched
-    if (flight.callsign && flight.callsign !== flight.hex && !flightRoutes.has(flight.callsign)) {
-      fetchFlightRoute(flight.callsign)
-    }
   }
 
   const closestFlight = flights[0]
@@ -481,11 +427,6 @@ export default function FlightRadar() {
                   {closestFlight.registration}
                 </span>
               )}
-              {flightRoutes.get(closestFlight.callsign)?.destinationName && (
-                <span className="text-yellow-400 font-semibold">
-                  → {flightRoutes.get(closestFlight.callsign)?.destinationName}
-                </span>
-              )}
             </div>
           </div>
         )}
@@ -543,7 +484,6 @@ export default function FlightRadar() {
             </h3>
 
             {flights.slice(0, 15).map(flight => {
-              const route = flightRoutes.get(flight.callsign)
               return (
                 <div
                   key={flight.hex}
@@ -588,11 +528,6 @@ export default function FlightRadar() {
                     {flight.registration && (
                       <span className="bg-slate-700 px-2 py-0.5 rounded font-mono text-gray-400">
                         {flight.registration}
-                      </span>
-                    )}
-                    {route?.destinationName && (
-                      <span className="text-yellow-400 font-semibold">
-                        → {route.destinationName}
                       </span>
                     )}
                   </div>
@@ -647,10 +582,6 @@ export default function FlightRadar() {
       {/* Flight Detail Modal */}
       <FlightDetailModal
         flight={selectedFlight}
-        origin={selectedFlight ? flightRoutes.get(selectedFlight.callsign)?.origin || null : null}
-        originName={selectedFlight ? flightRoutes.get(selectedFlight.callsign)?.originName || null : null}
-        destination={selectedFlight ? flightRoutes.get(selectedFlight.callsign)?.destination || null : null}
-        destinationName={selectedFlight ? flightRoutes.get(selectedFlight.callsign)?.destinationName || null : null}
         onClose={() => setSelectedFlight(null)}
       />
     </div>

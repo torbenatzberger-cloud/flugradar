@@ -2,10 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { getAircraftTypeName } from '../lib/aircraftTypes'
-import { getAirportName } from '../lib/airports'
 
 // App version
-const APP_VERSION = 'v1.3.0'
+const APP_VERSION = 'v1.4.0'
 
 // Default: Werastraße 18, Holzgerlingen
 const DEFAULT_LOCATION = { lat: 48.6406, lon: 9.0118 }
@@ -25,12 +24,6 @@ interface Flight {
   isApproaching: boolean
 }
 
-interface FlightRoute {
-  origin: string | null
-  originName: string | null
-  destination: string | null
-  destinationName: string | null
-}
 
 const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
   const R = 6371
@@ -66,7 +59,6 @@ const getAirlineInfo = (callsign: string | null): { color: string; name: string 
 
 export default function AlertMode() {
   const [alertFlight, setAlertFlight] = useState<Flight | null>(null)
-  const [alertRoute, setAlertRoute] = useState<FlightRoute | null>(null)
   const [showAlert, setShowAlert] = useState(false)
   const [lastAlertTime, setLastAlertTime] = useState<Date | null>(null)
   const [totalFlights, setTotalFlights] = useState(0)
@@ -74,31 +66,6 @@ export default function AlertMode() {
   const lastAlertedRef = useRef<Set<string>>(new Set())
   const prevDistancesRef = useRef<Map<string, number>>(new Map())
   const alertTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const routeCacheRef = useRef<Map<string, FlightRoute>>(new Map())
-
-  // Fetch route for a callsign
-  const fetchRoute = useCallback(async (callsign: string) => {
-    // Check cache first
-    if (routeCacheRef.current.has(callsign)) {
-      setAlertRoute(routeCacheRef.current.get(callsign) || null)
-      return
-    }
-
-    try {
-      const response = await fetch(`/api/routes?callsign=${encodeURIComponent(callsign)}`)
-      const data = await response.json()
-      const route: FlightRoute = {
-        origin: data.origin || null,
-        originName: data.originName || null,
-        destination: data.destination || null,
-        destinationName: data.destinationName || null,
-      }
-      routeCacheRef.current.set(callsign, route)
-      setAlertRoute(route)
-    } catch {
-      setAlertRoute(null)
-    }
-  }, [])
 
   const fetchFlights = useCallback(async () => {
     try {
@@ -144,13 +111,6 @@ export default function AlertMode() {
           setShowAlert(true)
           setLastAlertTime(new Date())
 
-          // Fetch route for this flight
-          if (closest.callsign && closest.callsign !== closest.hex) {
-            fetchRoute(closest.callsign)
-          } else {
-            setAlertRoute(null)
-          }
-
           // Play sound
           if (audioRef.current) {
             audioRef.current.currentTime = 0
@@ -180,7 +140,7 @@ export default function AlertMode() {
     } catch (err) {
       console.error('Fetch error:', err)
     }
-  }, [fetchRoute])
+  }, [])
 
   useEffect(() => {
     fetchFlights()
@@ -217,21 +177,6 @@ export default function AlertMode() {
 
             {alertFlight.name && (
               <div className="text-xl text-gray-300 mb-2">{alertFlight.name}</div>
-            )}
-
-            {/* Route Info */}
-            {alertRoute?.destinationName && (
-              <div className="mb-4">
-                <div className="text-sm text-gray-500">Ziel</div>
-                <div className="text-2xl text-yellow-400 font-bold">
-                  {alertRoute.destinationName}
-                </div>
-                {alertRoute.originName && (
-                  <div className="text-sm text-gray-500 mt-1">
-                    von {alertRoute.originName}
-                  </div>
-                )}
-              </div>
             )}
 
             <div className="text-5xl font-bold text-white mb-2">
