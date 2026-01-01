@@ -16,13 +16,13 @@ const FlightMap = dynamic(() => import('./components/FlightMap'), {
 })
 
 // App version - increment on each deploy
-const APP_VERSION = 'v1.4.1'
+const APP_VERSION = 'v1.5.0'
 
 // Default: Werastraße 18, Holzgerlingen
 const DEFAULT_LOCATION = { lat: 48.6406, lon: 9.0118, name: 'Holzgerlingen' }
 const ALERT_RADIUS_KM = 2 // 2km Alert-Zone
 const SEARCH_RADIUS_KM = 30 // Suchradius für API
-const REFRESH_INTERVAL = 8000 // 8 Sekunden
+const REFRESH_INTERVAL = 3000 // 3 Sekunden für schnelles Live-Tracking
 
 interface Flight {
   hex: string
@@ -46,6 +46,12 @@ interface Flight {
   prevDistance?: number
 }
 
+interface FlightRoute {
+  origin: string | null
+  originName: string | null
+  destination: string | null
+  destinationName: string | null
+}
 
 // Haversine distance formula
 const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -111,9 +117,39 @@ export default function FlightRadar() {
   const [showSettings, setShowSettings] = useState(false)
   const [showMap, setShowMap] = useState(false)
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null)
+  const [flightRoutes, setFlightRoutes] = useState<Map<string, FlightRoute>>(new Map())
   const audioRef = useRef<HTMLAudioElement>(null)
   const lastAlertRef = useRef<Set<string>>(new Set())
   const prevDistancesRef = useRef<Map<string, number>>(new Map())
+  const fetchingRoutesRef = useRef<Set<string>>(new Set())
+
+  // Fetch typical route for a flight (note: this is the typical route, not guaranteed current)
+  const fetchFlightRoute = useCallback(async (callsign: string) => {
+    if (fetchingRoutesRef.current.has(callsign) || flightRoutes.has(callsign)) return
+
+    fetchingRoutesRef.current.add(callsign)
+
+    try {
+      const response = await fetch(`/api/routes?callsign=${encodeURIComponent(callsign)}`)
+      const data = await response.json()
+
+      setFlightRoutes(prev => new Map(prev).set(callsign, {
+        origin: data.origin || null,
+        originName: data.originName || null,
+        destination: data.destination || null,
+        destinationName: data.destinationName || null,
+      }))
+    } catch {
+      setFlightRoutes(prev => new Map(prev).set(callsign, {
+        origin: null,
+        originName: null,
+        destination: null,
+        destinationName: null,
+      }))
+    } finally {
+      fetchingRoutesRef.current.delete(callsign)
+    }
+  }, [flightRoutes])
 
   // Fetch flights from ADSB.lol API
   const fetchFlights = useCallback(async () => {
@@ -197,6 +233,15 @@ export default function FlightRadar() {
     const interval = setInterval(fetchFlights, REFRESH_INTERVAL)
     return () => clearInterval(interval)
   }, [fetchFlights])
+
+  // Fetch routes for visible flights (top 10 only to reduce API calls)
+  useEffect(() => {
+    flights.slice(0, 10).forEach(flight => {
+      if (flight.callsign && flight.callsign !== flight.hex && !flightRoutes.has(flight.callsign)) {
+        fetchFlightRoute(flight.callsign)
+      }
+    })
+  }, [flights, fetchFlightRoute, flightRoutes])
 
   // Get GPS location
   const handleGetLocation = () => {
@@ -418,13 +463,18 @@ export default function FlightRadar() {
               </div>
             </div>
             {/* Additional info row */}
-            <div className="mt-2 flex items-center gap-2 text-xs text-gray-400">
+            <div className="mt-2 flex items-center gap-2 text-xs text-gray-400 flex-wrap">
               {closestFlight.type && (
                 <span>{getAircraftTypeName(closestFlight.type)}</span>
               )}
               {closestFlight.registration && (
                 <span className="bg-slate-700 px-2 py-0.5 rounded font-mono">
                   {closestFlight.registration}
+                </span>
+              )}
+              {flightRoutes.get(closestFlight.callsign)?.destinationName && (
+                <span className="text-yellow-400/80 italic">
+                  Typisch: → {flightRoutes.get(closestFlight.callsign)?.destinationName}
                 </span>
               )}
             </div>
@@ -518,7 +568,7 @@ export default function FlightRadar() {
                     </div>
                   </div>
 
-                  {/* New: Aircraft type, registration, route */}
+                  {/* Aircraft type, registration, typical route */}
                   <div className="flex items-center gap-2 mb-2 text-xs flex-wrap">
                     {flight.type && (
                       <span className="text-gray-500">
@@ -528,6 +578,11 @@ export default function FlightRadar() {
                     {flight.registration && (
                       <span className="bg-slate-700 px-2 py-0.5 rounded font-mono text-gray-400">
                         {flight.registration}
+                      </span>
+                    )}
+                    {flightRoutes.get(flight.callsign)?.destinationName && (
+                      <span className="text-yellow-400/80 italic">
+                        Typisch: → {flightRoutes.get(flight.callsign)?.destinationName}
                       </span>
                     )}
                   </div>
