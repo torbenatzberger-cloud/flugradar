@@ -1,6 +1,19 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import dynamic from 'next/dynamic'
+import { getAircraftTypeName } from './lib/aircraftTypes'
+import FlightDetailModal from './components/FlightDetailModal'
+
+// Dynamic import for Leaflet (SSR fix)
+const FlightMap = dynamic(() => import('./components/FlightMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-64 md:h-80 bg-slate-800 rounded-xl flex items-center justify-center border border-slate-700">
+      <span className="text-gray-400">Lade Karte...</span>
+    </div>
+  ),
+})
 
 // Default: Werastraße 18, Holzgerlingen
 const DEFAULT_LOCATION = { lat: 48.6406, lon: 9.0118, name: 'Holzgerlingen' }
@@ -28,6 +41,11 @@ interface Flight {
   color: string
   name: string
   prevDistance?: number
+}
+
+interface FlightRoute {
+  origin: string | null
+  destination: string | null
 }
 
 // Haversine distance formula
@@ -92,9 +110,35 @@ export default function FlightRadar() {
   const [alertFlights, setAlertFlights] = useState<Flight[]>([])
   const [alertEnabled, setAlertEnabled] = useState(true)
   const [showSettings, setShowSettings] = useState(false)
+  const [showMap, setShowMap] = useState(false)
+  const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null)
+  const [flightRoutes, setFlightRoutes] = useState<Map<string, FlightRoute>>(new Map())
   const audioRef = useRef<HTMLAudioElement>(null)
   const lastAlertRef = useRef<Set<string>>(new Set())
   const prevDistancesRef = useRef<Map<string, number>>(new Map())
+  const fetchingRoutesRef = useRef<Set<string>>(new Set())
+
+  // Fetch route for a single flight
+  const fetchFlightRoute = useCallback(async (callsign: string) => {
+    if (fetchingRoutesRef.current.has(callsign) || flightRoutes.has(callsign)) return
+
+    fetchingRoutesRef.current.add(callsign)
+
+    try {
+      const response = await fetch(`/api/routes?callsign=${encodeURIComponent(callsign)}`)
+      const data = await response.json()
+
+      setFlightRoutes(prev => new Map(prev).set(callsign, {
+        origin: data.origin || null,
+        destination: data.destination || null,
+      }))
+    } catch {
+      // Silently fail - routes are optional
+      setFlightRoutes(prev => new Map(prev).set(callsign, { origin: null, destination: null }))
+    } finally {
+      fetchingRoutesRef.current.delete(callsign)
+    }
+  }, [flightRoutes])
 
   // Fetch flights from ADSB.lol API
   const fetchFlights = useCallback(async () => {
@@ -102,13 +146,13 @@ export default function FlightRadar() {
       const response = await fetch(
         `/api/flights?lat=${location.lat}&lon=${location.lon}&dist=${SEARCH_RADIUS_KM}`
       )
-      
+
       if (!response.ok) {
         throw new Error(`API Error: ${response.status}`)
       }
-      
+
       const data = await response.json()
-      
+
       if (data.ac) {
         const processedFlights: Flight[] = data.ac
           .filter((ac: any) => ac.lat && ac.lon)
@@ -119,10 +163,10 @@ export default function FlightRadar() {
             const isDescending = ac.baro_rate && ac.baro_rate < -200
             const isLanding = isDescending && ac.alt_baro && ac.alt_baro < 10000
             const isInAlertZone = distance <= ALERT_RADIUS_KM
-            
+
             // Update previous distance
             prevDistancesRef.current.set(ac.hex, distance)
-            
+
             return {
               hex: ac.hex,
               callsign: ac.flight?.trim() || ac.hex,
@@ -145,13 +189,13 @@ export default function FlightRadar() {
             }
           })
           .sort((a: Flight, b: Flight) => a.distance - b.distance)
-        
+
         setFlights(processedFlights)
-        
+
         // Check for alerts - only approaching flights
         const inAlert = processedFlights.filter((f: Flight) => f.isInAlertZone)
         setAlertFlights(inAlert)
-        
+
         // Play alert sound for NEW flights entering zone
         if (alertEnabled && inAlert.length > 0) {
           const newAlerts = inAlert.filter((f: Flight) => !lastAlertRef.current.has(f.hex))
@@ -160,10 +204,10 @@ export default function FlightRadar() {
           }
         }
         lastAlertRef.current = new Set(inAlert.map((f: Flight) => f.hex))
-        
+
         setError(null)
       }
-      
+
       setLastUpdate(new Date())
       setLoading(false)
     } catch (err: any) {
@@ -178,6 +222,15 @@ export default function FlightRadar() {
     const interval = setInterval(fetchFlights, REFRESH_INTERVAL)
     return () => clearInterval(interval)
   }, [fetchFlights])
+
+  // Fetch routes for visible flights
+  useEffect(() => {
+    flights.slice(0, 15).forEach(flight => {
+      if (flight.callsign && flight.callsign !== flight.hex && !flightRoutes.has(flight.callsign)) {
+        fetchFlightRoute(flight.callsign)
+      }
+    })
+  }, [flights, fetchFlightRoute, flightRoutes])
 
   // Get GPS location
   const handleGetLocation = () => {
@@ -213,6 +266,14 @@ export default function FlightRadar() {
     setCustomLon('')
   }
 
+  const handleFlightClick = (flight: Flight) => {
+    setSelectedFlight(flight)
+    // Fetch route if not already fetched
+    if (flight.callsign && flight.callsign !== flight.hex && !flightRoutes.has(flight.callsign)) {
+      fetchFlightRoute(flight.callsign)
+    }
+  }
+
   const closestFlight = flights[0]
   const flightsInApproach = flights.filter(f => f.isLanding)
   const approachingFlights = flights.filter(f => f.isApproaching && f.distance < 10)
@@ -236,8 +297,15 @@ export default function FlightRadar() {
             </p>
           </div>
           <div className="flex gap-2">
-            <a 
-              href="/alert" 
+            <button
+              onClick={() => setShowMap(!showMap)}
+              className={`p-2 rounded-lg transition ${showMap ? 'bg-blue-600' : 'bg-slate-700 hover:bg-slate-600'}`}
+              title={showMap ? 'Liste anzeigen' : 'Karte anzeigen'}
+            >
+              {showMap ? '📋' : '🗺️'}
+            </button>
+            <a
+              href="/alert"
               className="p-2 bg-red-900/50 rounded-lg hover:bg-red-800/50 transition text-sm"
               title="Alert-Only Modus"
             >
@@ -256,7 +324,7 @@ export default function FlightRadar() {
         {showSettings && (
           <div className="bg-slate-800 rounded-xl p-4 mb-4 border border-slate-700">
             <h3 className="font-semibold mb-3">Einstellungen</h3>
-            
+
             <div className="space-y-3">
               <button
                 onClick={handleGetLocation}
@@ -264,14 +332,14 @@ export default function FlightRadar() {
               >
                 📍 GPS-Standort verwenden
               </button>
-              
+
               <button
                 onClick={handleResetLocation}
                 className="w-full py-2 px-4 bg-slate-700 hover:bg-slate-600 rounded-lg transition"
               >
                 🏠 Zurück zu Holzgerlingen
               </button>
-              
+
               <div className="border-t border-slate-600 pt-3">
                 <p className="text-sm text-gray-400 mb-2">Manuelle Koordinaten:</p>
                 <div className="flex gap-2">
@@ -297,7 +365,7 @@ export default function FlightRadar() {
                   Koordinaten setzen
                 </button>
               </div>
-              
+
               <div className="flex items-center justify-between border-t border-slate-600 pt-3">
                 <span className="text-sm">🔔 Alert-Sound</span>
                 <button
@@ -328,7 +396,11 @@ export default function FlightRadar() {
               </div>
             </div>
             {alertFlights.slice(0, 3).map(flight => (
-              <div key={flight.hex} className="bg-red-950/50 rounded-lg p-3 mt-2">
+              <div
+                key={flight.hex}
+                className="bg-red-950/50 rounded-lg p-3 mt-2 cursor-pointer hover:bg-red-950/70 transition"
+                onClick={() => handleFlightClick(flight)}
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className={`${flight.color} px-2 py-0.5 rounded text-sm font-bold`}>
@@ -341,7 +413,7 @@ export default function FlightRadar() {
                   </div>
                   <div className="text-right">
                     <div className="font-mono text-xl font-bold text-red-300">
-                      {flight.distance < 1 
+                      {flight.distance < 1
                         ? `${Math.round(flight.distance * 1000)}m`
                         : `${flight.distance.toFixed(1)}km`
                       }
@@ -356,7 +428,10 @@ export default function FlightRadar() {
 
         {/* Closest Flight (if not in alert) */}
         {closestFlight && !closestFlight.isInAlertZone && (
-          <div className="bg-slate-800 rounded-xl p-4 mb-4 border border-slate-700">
+          <div
+            className="bg-slate-800 rounded-xl p-4 mb-4 border border-slate-700 cursor-pointer hover:bg-slate-700/50 transition"
+            onClick={() => handleFlightClick(closestFlight)}
+          >
             <div className="text-sm text-gray-400 mb-2">Nächstes Flugzeug</div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 flex-wrap">
@@ -379,6 +454,22 @@ export default function FlightRadar() {
                   {formatAltitude(closestFlight.altitude)}
                 </div>
               </div>
+            </div>
+            {/* Additional info row */}
+            <div className="mt-2 flex items-center gap-2 text-xs text-gray-400">
+              {closestFlight.type && (
+                <span>{getAircraftTypeName(closestFlight.type)}</span>
+              )}
+              {closestFlight.registration && (
+                <span className="bg-slate-700 px-2 py-0.5 rounded font-mono">
+                  {closestFlight.registration}
+                </span>
+              )}
+              {flightRoutes.get(closestFlight.callsign)?.destination && (
+                <span>
+                  → {flightRoutes.get(closestFlight.callsign)?.destination}
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -418,74 +509,109 @@ export default function FlightRadar() {
           </div>
         )}
 
-        {/* Flight List */}
-        <div className="space-y-2 hide-scrollbar">
-          <h3 className="text-sm font-semibold text-gray-400 mb-2">
-            Flugzeuge im Umkreis ({SEARCH_RADIUS_KM}km)
-          </h3>
-          
-          {flights.slice(0, 15).map(flight => (
-            <div 
-              key={flight.hex}
-              className={`bg-slate-800/80 rounded-lg p-3 border transition ${
-                flight.isInAlertZone 
-                  ? 'border-red-500 bg-red-900/20' 
-                  : flight.isLanding 
-                    ? 'border-orange-500/50' 
-                    : 'border-slate-700'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`${flight.color} px-2 py-0.5 rounded text-sm font-bold`}>
-                    {flight.callsign}
-                  </span>
-                  <span className="text-gray-400 text-sm">{flight.name}</span>
-                  {flight.isLanding && (
-                    <span className="px-2 py-0.5 bg-orange-600/80 rounded text-xs">→ STR</span>
-                  )}
-                  {flight.isApproaching && (
-                    <span className="text-green-400 text-xs">↓</span>
-                  )}
-                </div>
-                <div className="font-mono text-blue-400">
-                  {flight.distance < 1 
-                    ? `${Math.round(flight.distance * 1000)}m`
-                    : `${flight.distance.toFixed(1)}km`
-                  }
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                <div className="bg-slate-900/50 rounded py-1">
-                  <div className="font-semibold">{formatAltitude(flight.altitude)}</div>
-                  <div className="text-gray-500">Höhe</div>
-                </div>
-                <div className="bg-slate-900/50 rounded py-1">
-                  <div className="font-semibold">{formatSpeed(flight.speed)}</div>
-                  <div className="text-gray-500">Speed</div>
-                </div>
-                <div className="bg-slate-900/50 rounded py-1">
-                  <div className="font-semibold">{getDirection(flight.heading)}</div>
-                  <div className="text-gray-500">Richtung</div>
-                </div>
-                <div className="bg-slate-900/50 rounded py-1">
-                  <div className={`font-semibold ${
-                    flight.isDescending ? 'text-orange-400' : 
-                    flight.verticalRate && flight.verticalRate > 200 ? 'text-green-400' : ''
-                  }`}>
-                    {flight.verticalRate 
-                      ? `${flight.verticalRate > 0 ? '↑' : '↓'}${Math.abs(Math.round(flight.verticalRate/100))}` 
-                      : '—'}
-                  </div>
-                  <div className="text-gray-500">V/S</div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        {/* Map or Flight List */}
+        {showMap ? (
+          <div className="mb-4">
+            <FlightMap
+              flights={flights}
+              userLocation={{ lat: location.lat, lon: location.lon }}
+              alertRadius={ALERT_RADIUS_KM}
+              searchRadius={SEARCH_RADIUS_KM}
+              onFlightClick={handleFlightClick}
+            />
+          </div>
+        ) : (
+          <div className="space-y-2 hide-scrollbar">
+            <h3 className="text-sm font-semibold text-gray-400 mb-2">
+              Flugzeuge im Umkreis ({SEARCH_RADIUS_KM}km)
+            </h3>
 
-        {flights.length > 15 && (
+            {flights.slice(0, 15).map(flight => {
+              const route = flightRoutes.get(flight.callsign)
+              return (
+                <div
+                  key={flight.hex}
+                  onClick={() => handleFlightClick(flight)}
+                  className={`bg-slate-800/80 rounded-lg p-3 border transition cursor-pointer hover:bg-slate-700/80 ${
+                    flight.isInAlertZone
+                      ? 'border-red-500 bg-red-900/20'
+                      : flight.isLanding
+                        ? 'border-orange-500/50'
+                        : 'border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`${flight.color} px-2 py-0.5 rounded text-sm font-bold`}>
+                        {flight.callsign}
+                      </span>
+                      <span className="text-gray-400 text-sm">{flight.name}</span>
+                      {flight.isLanding && (
+                        <span className="px-2 py-0.5 bg-orange-600/80 rounded text-xs">→ STR</span>
+                      )}
+                      {flight.isApproaching && (
+                        <span className="text-green-400 text-xs">↓</span>
+                      )}
+                    </div>
+                    <div className="font-mono text-blue-400">
+                      {flight.distance < 1
+                        ? `${Math.round(flight.distance * 1000)}m`
+                        : `${flight.distance.toFixed(1)}km`
+                      }
+                    </div>
+                  </div>
+
+                  {/* New: Aircraft type, registration, route */}
+                  <div className="flex items-center gap-2 mb-2 text-xs flex-wrap">
+                    {flight.type && (
+                      <span className="text-gray-500">
+                        {getAircraftTypeName(flight.type)}
+                      </span>
+                    )}
+                    {flight.registration && (
+                      <span className="bg-slate-700 px-2 py-0.5 rounded font-mono text-gray-400">
+                        {flight.registration}
+                      </span>
+                    )}
+                    {route?.origin && route?.destination && (
+                      <span className="text-gray-500">
+                        {route.origin} → {route.destination}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                    <div className="bg-slate-900/50 rounded py-1">
+                      <div className="font-semibold">{formatAltitude(flight.altitude)}</div>
+                      <div className="text-gray-500">Höhe</div>
+                    </div>
+                    <div className="bg-slate-900/50 rounded py-1">
+                      <div className="font-semibold">{formatSpeed(flight.speed)}</div>
+                      <div className="text-gray-500">Speed</div>
+                    </div>
+                    <div className="bg-slate-900/50 rounded py-1">
+                      <div className="font-semibold">{getDirection(flight.heading)}</div>
+                      <div className="text-gray-500">Richtung</div>
+                    </div>
+                    <div className="bg-slate-900/50 rounded py-1">
+                      <div className={`font-semibold ${
+                        flight.isDescending ? 'text-orange-400' :
+                        flight.verticalRate && flight.verticalRate > 200 ? 'text-green-400' : ''
+                      }`}>
+                        {flight.verticalRate
+                          ? `${flight.verticalRate > 0 ? '↑' : '↓'}${Math.abs(Math.round(flight.verticalRate/100))}`
+                          : '—'}
+                      </div>
+                      <div className="text-gray-500">V/S</div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {flights.length > 15 && !showMap && (
           <div className="text-center mt-4 text-gray-500 text-sm">
             + {flights.length - 15} weitere
           </div>
@@ -499,6 +625,14 @@ export default function FlightRadar() {
           )}
         </div>
       </div>
+
+      {/* Flight Detail Modal */}
+      <FlightDetailModal
+        flight={selectedFlight}
+        origin={selectedFlight ? flightRoutes.get(selectedFlight.callsign)?.origin || null : null}
+        destination={selectedFlight ? flightRoutes.get(selectedFlight.callsign)?.destination || null : null}
+        onClose={() => setSelectedFlight(null)}
+      />
     </div>
   )
 }

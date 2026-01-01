@@ -54,3 +54,30 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Leaflet marker styles */
+.flight-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.user-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Fix Leaflet z-index issues */
+.leaflet-pane {
+  z-index: 1;
+}
+
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 2;
+}
+
+/* Leaflet container styling */
+.leaflet-container {
+  background: #1e293b;
+  font-family: inherit;
+}
