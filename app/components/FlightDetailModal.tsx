@@ -27,14 +27,18 @@ interface Flight {
 interface FlightDetailModalProps {
   flight: Flight | null
   origin: string | null
+  originName: string | null
   destination: string | null
+  destinationName: string | null
   onClose: () => void
 }
 
 export default function FlightDetailModal({
   flight,
   origin,
+  originName,
   destination,
+  destinationName,
   onClose,
 }: FlightDetailModalProps) {
   if (!flight) return null
@@ -86,13 +90,13 @@ export default function FlightDetailModal({
         {/* Content */}
         <div className="p-4 space-y-4">
           {/* Route Info */}
-          {(origin || destination) && (
+          {(originName || destinationName) && (
             <div className="bg-slate-900/50 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 {/* Von */}
                 <div className="text-center flex-1">
                   <div className="text-xs text-gray-500 mb-1">Von</div>
-                  <div className="text-lg font-bold">{getAirportName(origin)}</div>
+                  <div className="text-lg font-bold">{originName || 'Unbekannt'}</div>
                   {origin && <div className="text-xs text-gray-500 font-mono">{origin}</div>}
                 </div>
 
@@ -102,7 +106,7 @@ export default function FlightDetailModal({
                 {/* Nach */}
                 <div className="text-center flex-1">
                   <div className="text-xs text-gray-500 mb-1">Nach</div>
-                  <div className="text-lg font-bold text-yellow-400">{getAirportName(destination)}</div>
+                  <div className="text-lg font-bold text-yellow-400">{destinationName || 'Unbekannt'}</div>
                   {destination && <div className="text-xs text-gray-500 font-mono">{destination}</div>}
                 </div>
               </div>

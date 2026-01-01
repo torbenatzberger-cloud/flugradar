@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { getAircraftTypeName } from '../lib/aircraftTypes'
 import { getAirportName } from '../lib/airports'
 
-const APP_VERSION = 'v1.2.1'
+const APP_VERSION = 'v1.3.0'
 const DEMO_LOCATION = { lat: 48.6406, lon: 9.0118 }
 const ALERT_RADIUS_KM = 2
 

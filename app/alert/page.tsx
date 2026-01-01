@@ -5,7 +5,7 @@ import { getAircraftTypeName } from '../lib/aircraftTypes'
 import { getAirportName } from '../lib/airports'
 
 // App version
-const APP_VERSION = 'v1.2.1'
+const APP_VERSION = 'v1.3.0'
 
 // Default: Werastraße 18, Holzgerlingen
 const DEFAULT_LOCATION = { lat: 48.6406, lon: 9.0118 }
@@ -27,7 +27,9 @@ interface Flight {
 
 interface FlightRoute {
   origin: string | null
+  originName: string | null
   destination: string | null
+  destinationName: string | null
 }
 
 const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -87,7 +89,9 @@ export default function AlertMode() {
       const data = await response.json()
       const route: FlightRoute = {
         origin: data.origin || null,
+        originName: data.originName || null,
         destination: data.destination || null,
+        destinationName: data.destinationName || null,
       }
       routeCacheRef.current.set(callsign, route)
       setAlertRoute(route)
@@ -216,15 +220,15 @@ export default function AlertMode() {
             )}
 
             {/* Route Info */}
-            {alertRoute?.destination && (
+            {alertRoute?.destinationName && (
               <div className="mb-4">
                 <div className="text-sm text-gray-500">Ziel</div>
                 <div className="text-2xl text-yellow-400 font-bold">
-                  {getAirportName(alertRoute.destination)}
+                  {alertRoute.destinationName}
                 </div>
-                {alertRoute.origin && (
+                {alertRoute.originName && (
                   <div className="text-sm text-gray-500 mt-1">
-                    von {getAirportName(alertRoute.origin)}
+                    von {alertRoute.originName}
                   </div>
                 )}
               </div>

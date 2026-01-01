@@ -17,7 +17,7 @@ const FlightMap = dynamic(() => import('./components/FlightMap'), {
 })
 
 // App version - increment on each deploy
-const APP_VERSION = 'v1.2.1'
+const APP_VERSION = 'v1.3.0'
 
 // Default: Werastraße 18, Holzgerlingen
 const DEFAULT_LOCATION = { lat: 48.6406, lon: 9.0118, name: 'Holzgerlingen' }
@@ -49,7 +49,10 @@ interface Flight {
 
 interface FlightRoute {
   origin: string | null
+  originName: string | null
   destination: string | null
+  destinationName: string | null
+  airline: string | null
 }
 
 // Haversine distance formula
@@ -134,11 +137,20 @@ export default function FlightRadar() {
 
       setFlightRoutes(prev => new Map(prev).set(callsign, {
         origin: data.origin || null,
+        originName: data.originName || null,
         destination: data.destination || null,
+        destinationName: data.destinationName || null,
+        airline: data.airline || null,
       }))
     } catch {
       // Silently fail - routes are optional
-      setFlightRoutes(prev => new Map(prev).set(callsign, { origin: null, destination: null }))
+      setFlightRoutes(prev => new Map(prev).set(callsign, {
+        origin: null,
+        originName: null,
+        destination: null,
+        destinationName: null,
+        airline: null,
+      }))
     } finally {
       fetchingRoutesRef.current.delete(callsign)
     }
@@ -469,9 +481,9 @@ export default function FlightRadar() {
                   {closestFlight.registration}
                 </span>
               )}
-              {flightRoutes.get(closestFlight.callsign)?.destination && (
+              {flightRoutes.get(closestFlight.callsign)?.destinationName && (
                 <span className="text-yellow-400 font-semibold">
-                  → {getAirportName(flightRoutes.get(closestFlight.callsign)?.destination ?? null)}
+                  → {flightRoutes.get(closestFlight.callsign)?.destinationName}
                 </span>
               )}
             </div>
@@ -578,9 +590,9 @@ export default function FlightRadar() {
                         {flight.registration}
                       </span>
                     )}
-                    {route?.destination && (
+                    {route?.destinationName && (
                       <span className="text-yellow-400 font-semibold">
-                        → {getAirportName(route.destination ?? null)}
+                        → {route.destinationName}
                       </span>
                     )}
                   </div>
@@ -636,7 +648,9 @@ export default function FlightRadar() {
       <FlightDetailModal
         flight={selectedFlight}
         origin={selectedFlight ? flightRoutes.get(selectedFlight.callsign)?.origin || null : null}
+        originName={selectedFlight ? flightRoutes.get(selectedFlight.callsign)?.originName || null : null}
         destination={selectedFlight ? flightRoutes.get(selectedFlight.callsign)?.destination || null : null}
+        destinationName={selectedFlight ? flightRoutes.get(selectedFlight.callsign)?.destinationName || null : null}
         onClose={() => setSelectedFlight(null)}
       />
     </div>
