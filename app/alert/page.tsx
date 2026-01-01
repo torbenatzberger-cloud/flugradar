@@ -5,7 +5,7 @@ import { getAircraftTypeName } from '../lib/aircraftTypes'
 import { getAirportName } from '../lib/airports'
 
 // App version
-const APP_VERSION = 'v1.2.0'
+const APP_VERSION = 'v1.2.1'
 
 // Default: Werastraße 18, Holzgerlingen
 const DEFAULT_LOCATION = { lat: 48.6406, lon: 9.0118 }

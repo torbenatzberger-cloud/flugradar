@@ -17,7 +17,7 @@ const FlightMap = dynamic(() => import('./components/FlightMap'), {
 })
 
 // App version - increment on each deploy
-const APP_VERSION = 'v1.2.0'
+const APP_VERSION = 'v1.2.1'
 
 // Default: Werastraße 18, Holzgerlingen
 const DEFAULT_LOCATION = { lat: 48.6406, lon: 9.0118, name: 'Holzgerlingen' }
@@ -471,7 +471,7 @@ export default function FlightRadar() {
               )}
               {flightRoutes.get(closestFlight.callsign)?.destination && (
                 <span className="text-yellow-400 font-semibold">
-                  → {getAirportName(flightRoutes.get(closestFlight.callsign)?.destination)}
+                  → {getAirportName(flightRoutes.get(closestFlight.callsign)?.destination ?? null)}
                 </span>
               )}
             </div>
@@ -580,7 +580,7 @@ export default function FlightRadar() {
                     )}
                     {route?.destination && (
                       <span className="text-yellow-400 font-semibold">
-                        → {getAirportName(route.destination)}
+                        → {getAirportName(route.destination ?? null)}
                       </span>
                     )}
                   </div>
