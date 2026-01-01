@@ -57,7 +57,7 @@ export default function AlertMode() {
   const fetchFlights = useCallback(async () => {
     try {
       const response = await fetch(
-        `https://api.adsb.lol/v2/lat/${DEFAULT_LOCATION.lat}/lon/${DEFAULT_LOCATION.lon}/dist/${SEARCH_RADIUS_KM}`
+        `/api/flights?lat=${DEFAULT_LOCATION.lat}&lon=${DEFAULT_LOCATION.lon}&dist=${SEARCH_RADIUS_KM}`
       )
       
       if (!response.ok) return

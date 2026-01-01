@@ -100,7 +100,7 @@ export default function FlightRadar() {
   const fetchFlights = useCallback(async () => {
     try {
       const response = await fetch(
-        `https://api.adsb.lol/v2/lat/${location.lat}/lon/${location.lon}/dist/${SEARCH_RADIUS_KM}`
+        `/api/flights?lat=${location.lat}&lon=${location.lon}&dist=${SEARCH_RADIUS_KM}`
       )
       
       if (!response.ok) {
