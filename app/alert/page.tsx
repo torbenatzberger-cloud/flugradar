@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { getAircraftTypeName } from '../lib/aircraftTypes'
 
 // App version
-const APP_VERSION = 'v1.4.0'
+const APP_VERSION = 'v1.4.1'
 
 // Default: Werastraße 18, Holzgerlingen
 const DEFAULT_LOCATION = { lat: 48.6406, lon: 9.0118 }
